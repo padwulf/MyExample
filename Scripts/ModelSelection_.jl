@@ -96,5 +96,18 @@ CVscore(modelopt2, Ke, Y, "LOO", (1,2,3), auc_)
 
 
 ## For KKRegressor
-### Setting (0,)
-model = KKRegressor()
+model = KKRegressor(size(Y), [0.01], self, SE, L2)
+auc_(predict(model, K), Y)
+fit(model, K, Y)
+auc_(predict(model, K), Y)
+fit(model, K, Y)
+auc_(predict(model, K), Y)
+
+CVscore(model, K, Y, 3, (0,), auc_, 3)
+CVscore(model, K, Y, 5, (0,), auc_, 3)
+
+model2 = KKRegressor(size(Y), [1.0], self, SE, L2)
+CVscore(model2, K, Y, 5, (0,), auc_, 3)
+CVscore(model2, K, Y, 10, (1,), auc_, 3)
+CVscore(model2, K, Y, 5, (1,2,), auc_, 3)
+CVscore(model2, K, Y, 5, (2,3,), auc_, 3)
