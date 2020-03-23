@@ -31,7 +31,7 @@ function fit(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor) where T<:
     model.A_[:] = G*Y
 end
 
-function predict(model::MultilinearKroneckerModel, kernels::Array)
+function predict(model::NSKRRegressor, kernels::Array)
     K = Mps(kernels)
     return SparseTensor(model.A_*K)
 end
@@ -121,7 +121,7 @@ function fit(model::KKRegressor, kernels, Y::SparseTensor, init, optimizer)
     function objective(A, model, kernels, Y)
         #println(model.L_(A, kernels, model.a_, Y) + model.λ_[1]*model.R_(A, kernels))
         r =  model.L_(A, kernels, model.a_, Y)  + model.λ_[1]*model.R_(A, kernels)
-        println(r)
+        #println(r)
         return r
     end
     a = objective(model.A_, model, kernels, Y)
@@ -142,4 +142,8 @@ function fit(model::KKRegressor, kernels, Y::SparseTensor, optimizer)
 end
 function fit(model::KKRegressor, kernels, Y::SparseTensor)
     return fit(model, kernels, Y, model.A_, LBFGS())
+end
+function predict(model::KKRegressor, kernels)
+    K = Mps(kernels)
+    return SparseTensor(model.a_(K*model.A_))
 end
