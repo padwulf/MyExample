@@ -3,7 +3,7 @@ module MyExample
 
 
 
-export NSKRRegressor
+export NSKRRegressor, KKRegressor
 export fit,predict,predict_LOO
 
 
@@ -13,6 +13,8 @@ export density, tensor, full, fill
 export Kfold, CVestimate, CVscore, optimizeHyperParameters
 
 export auc_
+
+export SE, self, L2
 
 
 #include("NSKRRegressor.jl")

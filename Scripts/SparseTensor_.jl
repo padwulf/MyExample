@@ -18,10 +18,7 @@ Y2 = tensor(Y)
 
 
 # removing some elements form Y
-for i in 1:2000
-    els = delete!(Y.elements_, collect(keys(Y.elements_))[1])
-end
-Y
-density(Y)
-full(Y)
-tensor(Y, "zeros")   #note that here to have a tensor, we must define how to fill missing elements
+Y2 = SparseTensor(Y, eachindex(Y)[1:1000])
+density(Y2)
+full(Y2)
+tensor(Y, "zeros")

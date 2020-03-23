@@ -1,9 +1,6 @@
 import Base.*
 using TensorOperations
 
-# verbetering: kijken of MPS ook Eigen kan bevatten en daarmee ncon doen. Indien niet kan mss nuttig zijn
-# zelf een implementatie voor tensor*matrix. met matrix een Eigen. Dit kan mss veel sneller.
-
 struct Mps{}
     matrices::Array{AbstractMatrix}
     optimalOrder::Vector{Int}
@@ -16,6 +13,7 @@ struct Mps{}
 end
 
 function optimalSequence1(array)
+    #voor het algemene geval, brute force.
     product = prod(last.(array))
     array = [[array[i][1], array[i][2], i] for i in 1:length(array)]       #third element is indexnumber
     (optcost, optseq) =  costPermutatingrecursive([], array, product, 0, Inf, array)

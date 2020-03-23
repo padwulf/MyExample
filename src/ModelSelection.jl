@@ -1,4 +1,4 @@
-include("NSKRRegressor.jl")
+include("Models.jl")
 include("Scores.jl")
 
 
@@ -6,17 +6,6 @@ import Random.randperm
 import Random.shuffle!
 using Statistics
 using Optim
-
-
-pre = "Data/0.5_(15, 15, 15)_(1, 1, 1)"
-Y = SparseTensor(pre*"_data.txt")
-K1 = readdlm(pre*"_k1.txt")
-K2 = readdlm(pre*"_k2.txt")
-K3 = readdlm(pre*"_k3.txt")
-kernels = [K1,K2,K3]
-kernelseigen = eigen.(kernels)
-
-model = NSKRRegressor(size(Y), [10^(-2), 10^(-2), 10^(-2)], "zeros")
 
 function splitn(x::AbstractArray, n::Int)
     shuffle!(x)
@@ -57,7 +46,6 @@ function Kfold(inds::Array, setting::Tuple, nfolds)
     return folds
 end
 
-
 function CVestimate(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple)
     #determine the folds
     if folding == "LOO"
@@ -73,6 +61,7 @@ function CVestimate(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, 
     for fold in folds
         traininds, testinds = fold
         Y_train = SparseTensor(Y, traininds)
+        model.A_[:]=0.001*randn(size(model.A_))[:]
         fit(model, kernels, Y_train)
         Yest = predict(model, kernels)
         for I in testinds
@@ -83,7 +72,7 @@ function CVestimate(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, 
 end
 
 function CVscore(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score)
-    Ycvest = CVestimate(model, kernelseigen, Y, folding, setting)
+    Ycvest = CVestimate(model, kernels, Y, folding, setting)
     @assert isempty(setdiff(eachindex(Y), eachindex(Ycvest)))
     inds = eachindex(Y)
     Y = Y[inds]
