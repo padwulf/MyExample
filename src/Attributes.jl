@@ -7,7 +7,6 @@ function SE(A::Array, kernels::Mps, activation, Y::SparseTensor)
     it = eachindex(Y)
     d = (Yest[it] - Y[it])
     return sum(d .* d)
-
 end
 function SE_deriv(A::Array, kernels::Mps, activation, activation_deriv, Y::SparseTensor)
     z = kernels*A
