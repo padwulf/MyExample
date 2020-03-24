@@ -12,40 +12,38 @@ function splitn(x::AbstractArray, n::Int)
     s = length(x) / n
     [x[round(Int64, (i-1)*s)+1:min(length(x),round(Int64, i*s))] for i=1:n]
 end
-function Kfold(inds::Array, setting::Tuple, nfolds)
-    if setting == (0,)
-        s = splitn(inds, nfolds)
-    elseif true # setting where all indices omitted should be implemented differently
-        maxi = maximum(inds)
-        tofreelyselect=setdiff(collect(1:length(maxi)), setting)
-        d = Dict()
-        for I in inds
-            key = [I[i] for i in tofreelyselect]
+
+function Kfold(cartesianinds::Array, setting::Tuple, nfolds)
+    if setting == Tuple([false for i in 1:length(setting)]) #setting A
+        buckets = splitn(cartesianinds, nfolds)
+    elseif setting == Tuple([true for i in 1:length(setting)])
+        throw("kfolding for this setting not yet implemented")
+    else
+        d = Dict() # keys: contain indices where to freely select, values: all observed CartesianIndices according to a key
+        for I in cartesianinds
+            key = [I[i] for i in 1:length(setting) if setting[i]==false]
             if key in keys(d)
                 push!(d[key], I)
             else
                 d[key]=[I]
             end
         end
-        s_keys = splitn(collect(keys(d)), nfolds)
-        s = [[] for i in 1:length(s_keys)]
-        for i in 1:length(s_keys)
-            for j in 1:length(s_keys[i])
-                s[i] = cat(s[i], d[s_keys[i][j]], dims=1)
+        buckets_keys = splitn(collect(keys(d)), nfolds)
+        buckets = [[] for i in 1:length(buckets_keys)]
+        for i in 1:length(buckets)
+            for j in 1:length(buckets_keys[i])
+                buckets[i] = cat(buckets[i], d[buckets_keys[i][j]], dims=1)
             end
         end
-
-    else
-        println("other settings not yet implemented")
     end
     folds = []
     for i in 1:nfolds
-        a = (train, test) = vcat(s[1:end .!= i]...), s[i]
+        a = (train, test) = vcat(buckets[1:end .!= i]...), buckets[i]
         push!(folds,a)
     end
     return folds
-end
 
+end
 function CVestimate(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple)
     #determine the folds
     if folding == "LOO"
@@ -88,6 +86,7 @@ function CVscore(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, fol
     end
     return mean(scores),3*std(scores)
 end
+
 # when all hyperparameters the same:
 function optimizeHyperParameters(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score)
     model = deepcopy(model)

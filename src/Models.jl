@@ -81,7 +81,7 @@ function predict_LOO(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor, s
     catch e
         Y = tensor(Y, model.fill_)
     end
-    if setting==(0,)
+    if setting==Tuple([false for i in 1:length(setting)])
         H = Mps(H__.(kernels, model.λ_))
         H_diag = Mps(Diagonal.(H.matrices))
         res = H*Y - H_diag*Y
@@ -94,16 +94,16 @@ function predict_LOO(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor, s
         end
     else
         hats = Matrix.(H__.(kernels, model.λ_))
-        for i in setting
-            hats[i] = H__LOO(hats[i])
+        for i in 1:length(setting)
+            if setting[i]
+                hats[i] = H__LOO(hats[i])
+            end
         end
         H_LOO = Mps(hats)
         res = H_LOO*Y
     end
     return SparseTensor(res)
 end
-
-
 
 function G__(kernel::Eigen, λ::Float64)
     values = ones(length(kernel.values)) ./ (kernel.values + λ*ones(length(kernel.values)))
