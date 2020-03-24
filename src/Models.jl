@@ -21,16 +21,32 @@ struct NSKRRegressor <: MultilinearKroneckerModel
 end
 
 function fit(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor) where T<:Eigen
-    try
+    if !full(Y)
+        if m.fill_=="No fill"
+            fit_iteratively(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor)
+        else
+            Y = tensor(Y, model.fill_)
+            @assert size(Y) == Tuple(length.([kernel.values for kernel in kernels]))
+            G = Mps(Matrix.(G__.(kernels, model.λ_)))
+            model.A_[:] = G*Y
+        end
+    else
         Y = tensor(Y)
-    catch e
-        Y = tensor(Y, model.fill_)
+        @assert size(Y) == Tuple(length.([kernel.values for kernel in kernels]))
+        G = Mps(Matrix.(G__.(kernels, model.λ_)))
+        model.A_[:] = G*Y
     end
-    @assert size(Y) == Tuple(length.([kernel.values for kernel in kernels]))
-    G = Mps(Matrix.(G__.(kernels, model.λ_)))
-    model.A_[:] = G*Y
 end
-
+function fit_iteratively(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor) where T<:Eigen
+    return fit_iteratively(model, kernels, Y, model.A_, LBFGS())
+end
+function fit_iteratively(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor, init, optimizer) where T<:Eigen
+    inversehats = Mps(Matrix.(Hinverse__.(kernels, model.λ_)))
+    kernels = Mps(Matrix.(kernels))
+    b = optimize(A -> Loss_NSKR(A,Y,kernels, inversehats), (G,A)->Loss_NSKR_deriv(G,A,Y,kernels, inversehats), init, optimizer)
+    model.A_[:] = b.minimizer
+    return b
+end
 function predict(model::NSKRRegressor, kernels::Array)
     K = Mps(kernels)
     return SparseTensor(model.A_*K)
@@ -85,10 +101,35 @@ function H__(kernel::Eigen, λ::Float64)
     values = kernel.values ./ (kernel.values + λ*ones(length(kernel.values)))
     return Eigen(values, kernel.vectors)
 end
+function Hinverse__(kernel::Eigen, λ::Float64)
+    values = (kernel.values + λ*ones(length(kernel.values))) ./  kernel.values
+    return Eigen(values, kernel.vectors)
+end
 function H__LOO(H)
     return (H - Diagonal(H)) ./ (ones(size(H)[1]) - diag(H))
 end
-
+function Loss_NSKR(A::AbstractArray, Y::AbstractArray, kernels::Mps, inversehats:: Mps)
+    Yest = SparseTensor(kernels*A)
+    ridgepart = inversehats * Yest - Yest
+    inds = eachindex(Y)
+    Yinds = Y[inds]
+    Yestinds = Yest[inds]
+    l_ = sum((Yinds-Yestinds) .* (Yinds-Yestinds)) + sum( Yest .* ridgepart)
+    println(l_)
+    return l_
+end
+function Loss_NSKR_deriv(G, A::AbstractArray, Y::AbstractArray, kernels::Mps, inversehats:: Mps)
+    Yest = kernels * A
+    dldf = zeros(size(Y))
+    for I in eachindex(Y)
+        dldf[I] = Yest[I] - Y[I]
+    end
+    dldf += ( inversehats *Yest - Yest)
+    dldfdfdA = kernels * dldf
+    G[:,:,:] = dldfdfdA
+    #println(("deriv ",sum(G.*G)))
+    return G
+end
 
 
 
@@ -119,18 +160,15 @@ end
 function fit(model::KKRegressor, kernels, Y::SparseTensor, init, optimizer)
     kernels = Mps(kernels)
     function objective(A, model, kernels, Y)
-        #println(model.L_(A, kernels, model.a_, Y) + model.λ_[1]*model.R_(A, kernels))
         r =  model.L_(A, kernels, model.a_, Y)  + model.λ_[1]*model.R_(A, kernels)
         #println(r)
         return r
     end
-    a = objective(model.A_, model, kernels, Y)
     function objective_deriv(G, A, model, kernels, Y)
         r = model.Lderiv_(A, kernels, model.a_, model.aderiv_, Y) + model.λ_[1]*model.Rderiv_(A,kernels)
         G[:]  = r[:]
         return G
     end
-    b = objective_deriv(randn(size(Y)),model.A_, model, kernels, Y)
     b = optimize(A -> objective(A, model, kernels, Y), (G,A) -> objective_deriv(G, A, model, kernels, Y), init, optimizer, Optim.Options(iterations=100))
     model.A_[:]=b.minimizer[:]
     @assert model.A_[:]==b.minimizer[:]
