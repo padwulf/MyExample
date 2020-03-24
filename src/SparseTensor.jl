@@ -45,7 +45,17 @@ function SparseTensor(a::Array)
     end
     return SparseTensor(d, size(a))
 end
-
+function save(T::SparseTensor, name)
+    tosave = zeros(length(keys(T.elements_)), length(size(T))+1)
+    for it in zip(1:length(keys(T.elements_)),keys(T.elements_))
+        i, key  = it
+        for j in 1:length(size(T))
+            tosave[i,j] = key[j]
+        end
+        tosave[i,end] = T.elements_[key]
+    end
+    writedlm(name, tosave)
+end
 function size(T::SparseTensor)
     return T.size_
 end
