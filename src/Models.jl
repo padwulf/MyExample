@@ -20,6 +20,12 @@ struct NSKRRegressor <: MultilinearKroneckerModel
     end
 end
 
+function fit(model::NSKRRegressor, kernels, Y::SparseTensor)
+    println("Diagonalizing kernels..")
+    kernelseigen = eigen.(kernels)
+    println("Diagonalizing kernels done.")
+    fit(model, kernelseigen, Y)
+end
 function fit(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor) where T<:Eigen
     if !full(Y)
         if m.fill_=="No fill"
@@ -63,6 +69,12 @@ function predict(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor) where
     return SparseTensor(H*Y)
 end
 
+function predict_LOO(model::NSKRRegressor, kernels, Y::SparseTensor, setting::Tuple)
+    println("Diagonalizing kernels..")
+    kernelseigen = eigen.(kernels)
+    println("Diagonalizing kernels done.")
+    predict_LOO(model, kernelseigen, Y,setting)
+end
 function predict_LOO(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor, setting::Tuple) where T<:Eigen
     try
         Y = tensor(Y)
