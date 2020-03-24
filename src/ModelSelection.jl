@@ -88,27 +88,32 @@ function CVscore(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, fol
     end
     return mean(scores),3*std(scores)
 end
-
-function optimizeHyperParameters(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score, optimizer, init, same)
+# when all hyperparameters the same:
+function optimizeHyperParameters(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score)
     model = deepcopy(model)
     function objective(λ, model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score)
         model.λ_[:]=λ[:]
         println(model.λ_)
         return -CVscore(model, kernels, Y, folding, setting, score)
     end
-    if length(model.λ_)>1
-        if same
-            b = optimize(λ -> objective([λ for i in 1:length(model.λ_)],model, kernels,Y,folding,setting,score), 0.001, 1000)
-            minimizer = [b.minimizer for i in 1:length(model.λ_)]
-        else
-            lower = zeros(length(model.λ_))
-            upper = [Inf for i in 1:length(model.λ_)]
-            inner_optimizer = optimizer
-
-            b = optimize(λ -> objective(λ,model, kernels,Y,folding,setting,score), lower, upper, init, Fminbox(inner_optimizer))
-            minimizer = b.minimizer
-        end
+    b = optimize(λ -> objective([λ for i in 1:length(model.λ_)],model, kernels,Y,folding,setting,score), 0.001, 1000)
+    minimizer = [b.minimizer for i in 1:length(model.λ_)]
+    model.λ_[:]=minimizer[:]
+    return model, b
+end
+#when differetn hyperparemeters
+function optimizeHyperParameters(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score, optimizer, init)
+    model = deepcopy(model)
+    function objective(λ, model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score)
+        model.λ_[:]=λ[:]
+        println(model.λ_)
+        return -CVscore(model, kernels, Y, folding, setting, score)
     end
+    lower = zeros(length(model.λ_))
+    upper = [Inf for i in 1:length(model.λ_)]
+    inner_optimizer = optimizer
+    b = optimize(λ -> objective(λ,model, kernels,Y,folding,setting,score), lower, upper, init, Fminbox(inner_optimizer))
+    minimizer = b.minimizer
     model.λ_[:]=minimizer[:]
     return model, b
 end
