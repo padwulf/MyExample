@@ -28,7 +28,7 @@ function fit(model::NSKRRegressor, kernels, Y::SparseTensor)
 end
 function fit(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor) where T<:Eigen
     if !full(Y)
-        if m.fill_=="No fill"
+        if model.fill_=="No fill"
             fit_iteratively(model::NSKRRegressor, kernels::Array{T}, Y::SparseTensor)
         else
             Y = tensor(Y, model.fill_)
