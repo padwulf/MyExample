@@ -44,23 +44,22 @@ function Kfold(cartesianinds::Array, setting::Tuple, nfolds)
     return folds
 
 end
-function CVestimate(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple)
+function CVestimate(model::MultilinearKroneckerModel, kernels, Y, inds, folding, setting::Tuple)
     #determine the folds
     if folding == "LOO"
-        return predict_LOO(model, kernels, Y, setting)
+        return predict_LOO(model, kernels, Y, inds, setting)
     elseif typeof(folding) <: Int
-        folds = Kfold(eachindex(Y), setting, folding)
+        folds = Kfold(inds, setting, folding)
     elseif typeof(folding) <: AbstractArray
         folds = folding
     else
         throw("Input for nfolds not valid")
     end
-    Ycvest = SparseTensor(size(Y))
+    Ycvest = Array{Float64}(undef, size(Y))
     for fold in folds
         traininds, testinds = fold
-        Y_train = SparseTensor(Y, traininds)
         model.A_[:]=0.001*randn(size(model.A_))[:]
-        fit(model, kernels, Y_train)
+        fit(model, kernels, Y, traininds)
         Yest = predict(model, kernels)
         for I in testinds
             Ycvest[I] = Yest[I]
@@ -69,50 +68,50 @@ function CVestimate(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, 
     return Ycvest
 end
 
-function CVscore(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score)
-    Ycvest = CVestimate(model, kernels, Y, folding, setting)
-    @assert isempty(setdiff(eachindex(Y), eachindex(Ycvest)))
-    inds = eachindex(Y)
-    Y = Y[inds]
-    Ycvest = Ycvest[inds]
+function CVscore(model::MultilinearKroneckerModel, kernels, Y, inds, folding, setting::Tuple, score)
+    Ycvest = CVestimate(model, kernels, Y, inds, folding, setting)
+    Y = [Y[inds[i]] for i in 1:length(inds)]
+    Ycvest = [Ycvest[inds[i]] for i in 1:length(inds)]
     return score(Ycvest, Y)
 end
 
-function CVscore(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score, times)
+function CVscore(model::MultilinearKroneckerModel, kernels, Y, inds, folding, setting::Tuple, score, times)
     scores = []
     for i in 1:times
-        sc = CVscore(model, kernels, Y, folding, setting, score)
+        sc = CVscore(model, kernels, Y, inds, folding, setting, score)
         push!(scores, sc)
     end
     return mean(scores),3*std(scores)
 end
 
 # when all hyperparameters the same:
-function optimizeHyperParameters(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score)
-    model = deepcopy(model)
-    function objective(λ, model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score)
-        model.λ_[:]=λ[:]
-        println(model.λ_)
-        return -CVscore(model, kernels, Y, folding, setting, score)
-    end
-    b = optimize(λ -> objective([λ for i in 1:length(model.λ_)],model, kernels,Y,folding,setting,score), 0.001, 1000)
-    minimizer = [b.minimizer for i in 1:length(model.λ_)]
-    model.λ_[:]=minimizer[:]
-    return model, b
+function optimizeHyperParameters(model::MultilinearKroneckerModel, kernels, Y, inds, folding, setting::Tuple, score)
+    lower = 0.001
+    upper = 10000
+    optimizer = Brent()
+    optimizeHyperParameters(model, kernels, Y, inds, folding, setting, score, lower, upper, optimizer)
 end
-#when differetn hyperparemeters
-function optimizeHyperParameters(model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score, optimizer, init)
-    model = deepcopy(model)
-    function objective(λ, model::MultilinearKroneckerModel, kernels, Y::SparseTensor, folding, setting::Tuple, score)
+function optimizeHyperParameters(model::MultilinearKroneckerModel, kernels, Y, inds, folding, setting::Tuple, score, lower, upper, optimizer)
+    function objective(λ, model::MultilinearKroneckerModel, kernels, Y, inds, folding, setting::Tuple, score)
         model.λ_[:]=λ[:]
-        println(model.λ_)
-        return -CVscore(model, kernels, Y, folding, setting, score)
+        return -CVscore(model, kernels, Y, inds, folding, setting, score)
+    end
+    opt = optimize(λ -> objective([λ for i in 1:length(model.λ_)],model, kernels,Y, inds,folding,setting,score), lower, upper, optimizer, store_trace=true)
+    model.λ_[:]=[opt.minimizer for i in 1:length(model.λ_)]
+    return opt
+end
+
+#when differetn hyperparemeters
+function optimizeHyperParameters(model::MultilinearKroneckerModel, kernels, Y, inds, folding, setting::Tuple, score, optimizer, init)
+    function objective(λ, model::MultilinearKroneckerModel, kernels, Y, inds, folding, setting::Tuple, score)
+        model.λ_[:]=λ[:]
+        #println(model.λ_)
+        return -CVscore(model, kernels, Y, inds, folding, setting, score)
     end
     lower = zeros(length(model.λ_))
     upper = [Inf for i in 1:length(model.λ_)]
     inner_optimizer = optimizer
-    b = optimize(λ -> objective(λ,model, kernels,Y,folding,setting,score), lower, upper, init, Fminbox(inner_optimizer))
-    minimizer = b.minimizer
-    model.λ_[:]=minimizer[:]
-    return model, b
+    opt = optimize(λ -> objective(λ,model, kernels,Y, inds,folding,setting,score), lower, upper, init, Fminbox(inner_optimizer), Optim.Options(store_trace=true))
+    model.λ_[:]=opt.minimizer[:]
+    return opt
 end

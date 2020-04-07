@@ -4,15 +4,15 @@ module MyExample
 
 
 export NSKRRegressor, KKRegressor
-export fit,predict,predict_LOO
+export fit,predict,predict_LOO,fit_iteratively
 
 
 export SparseTensor
-export density, tensor, full, fill
+export readtensor
 
 export Kfold, CVestimate, CVscore, optimizeHyperParameters
 
-export auc_
+export auc_,R2_
 
 export SE, self, L2
 

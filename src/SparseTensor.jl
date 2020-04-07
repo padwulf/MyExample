@@ -5,6 +5,32 @@ import Base.setindex!
 import Base.eachindex
 import Base.CartesianIndices
 
+function readtensor(filename)
+    data = readdlm(filename, Float64)
+    cartesianindices = []
+
+    size_tensor = Tuple([Int(maximum(data[:,i])) for i in 1:length(data[1,:])-1])
+    densetensor = Array{Union{Missing, Float64}}(missing, size_tensor)
+    for i in 1:size(data)[1]
+        I = CartesianIndex(Tuple(convert(Array{Int}, data[i,1:end-1])))
+        push!(cartesianindices, I)
+        densetensor[I] = data[i,end]
+    end
+    return densetensor, cartesianindices
+end
+function fill(T, inds, fill)
+    if fill == "zeros"
+        filled = zeros(size(T))
+        for I in inds
+            filled[I] = T[I]
+        end
+        return filled
+    else
+        println("fill not implemented")
+    end
+end
+
+"""
 struct SparseTensor{T,N} <: AbstractArray{T,N}
     # T is set to Float64. Should be ...
     elements_::Dict
@@ -140,3 +166,4 @@ function tensor(T::SparseTensor, howtofill::String)
         println("this fill method not implemented:  "* how)
     end
 end
+"""
