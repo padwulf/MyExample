@@ -127,8 +127,6 @@ end
 
 
 
-
-
 struct KKRegressor <: MultilinearKroneckerModel
     A_::AbstractArray
     λ_::Array{Float64}
@@ -179,41 +177,4 @@ function fit(model::KKRegressor, K, Y, inds)
 end
 function predict(model::KKRegressor, K)
     return model.a_.(model.A_*K)
-end
-
-pre = "/home/padwulf/Documents/Experiments/Datasets/Artificial/Classification/0.5_(15, 15, 15)_(1, 1, 1)"
-Y, inds = readtensor(pre*"/data.txt")
-K1 = readdlm(pre*"/k1.txt")
-K2 = readdlm(pre*"/k2.txt")
-K3 = readdlm(pre*"/k3.txt")
-K = [K1,K2,K3]
-Ke = eigen.(K)
-
-m = KKRegressor(size(Y), [1.], 1000, "Regression")
-m2 = KKRegressor(size(Y), [1], 1000, "Classification")
-
-@time f= fit(m, Mps(K), Y, inds)
-visualize_optimization(f, "mljk")
-
-f2= fit(m2, Mps(K), Y, inds)
-visualize_optimization(f2, "mljk")
-
-
-
-m2
-
-f2.trace
-
-using Plots
-function visualize_optimization(b, title)
-    iterations = []
-    f = []
-    gnorm = []
-    for i in 1:length(b.trace)
-        push!(iterations, b.trace[i].iteration)
-        push!(f, b.trace[i].value)
-        push!(gnorm, b.trace[i].g_norm)
-    end
-    plot(iterations, f, label= "f")
-    plot!(iterations, gnorm, label= "gnorm", title = title)
 end
