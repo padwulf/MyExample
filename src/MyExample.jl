@@ -12,7 +12,7 @@ export readtensor
 
 export Kfold, CVestimate, CVscore, optimizeHyperParameters
 
-export auc_,R2_
+export R2_, auc_precisionrecall, auc_roc, max_f1
 
 export SE, self, L2
 

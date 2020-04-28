@@ -5,7 +5,6 @@ include("Attributes.jl")
 using LinearAlgebra
 using Optim
 import LinearAlgebra: eigen, \, det, logdet, inv
-using SparseArrays
 
 
 
@@ -69,7 +68,8 @@ function predict(model::NSKRRegressor, K::Array{T}) where T<: Eigen
 end
 
 function predict(model::NSKRRegressor, kernels::Array{T}, Y) where T<:Eigen
-    Yfilled = fill(Y, inds, model.fill_)
+    #Yfilled = fill(Y, inds, model.fill_)
+    Yfilled = Y
     H = Mps(Matrix.(H__.(kernels, model.λ_)))
     return H*Yfilled
 end
@@ -178,3 +178,104 @@ end
 function predict(model::KKRegressor, K)
     return model.a_.(model.A_*K)
 end
+
+struct KKTRegressor <: MultilinearKroneckerModel
+    rank_::Int
+    D_::AbstractArray
+    U_::AbstractArray
+    λ_::Array{Float64}
+    n_iter::Int
+    a_                      #activationfunction
+    aderiv_
+    L_                      #lossfucniton
+    Lderiv_
+    R_
+    Rderiv_
+
+    function KKTRegressor(size, λ, n_iter, type, rank)
+        if type == "Regression"
+            a,aderiv = self,self_deriv
+            L,Lderiv = se, se_deriv
+            R,Rderiv = l2, l2_deriv
+        elseif type == "Classification"
+            a,aderiv = sigmoid,sigmoid_deriv
+            L,Lderiv = bce, bce_deriv
+            R,Rderiv = l2, l2_deriv
+        else
+            println("not implemented")
+        end
+        U = [0.1*randn(size[i], rank) for i in 1:length(size)]
+        D = 0.1*randn(rank)
+        new(rank, D, U,λ, n_iter, a, aderiv, L, Lderiv, R, Rderiv)
+        LossTucker_reg!(0,0,D,U, K,0,0,0,0,inds,0,0,0,0)
+    end
+end
+
+# For the tucker based model with D and U's:
+# Loss: generic for all combinations in losses and regs: F and G are value and derivative w.r.t. D, U's
+# l = given as argument = l(y,f)  with f = a(A*K)
+# r = given as argumnet = r(A,K)
+# note that Y is a dense label tensor. inds denote what labels are really observed to evaluate the lossfunction.
+function LossTucker_reg!(F,G,D,U,K,act,actderiv,λ,Y,inds, loss,lossderiv, reg, regderiv)
+    KU = K .* U
+    z = zeros(length(inds))
+    print(size(z))
+    for i in 1:length(z)
+        I = inds[i]
+        res = D
+        for j in 1:length(I)
+            res = res .* KU[j][I[j],:]
+        end
+        print(res)
+        z[i] = sum(res)
+    end
+    return(z)
+end
+"""
+inds
+KKTRegressor(size(Y), [0.1], 50, "Regression", 3)
+U
+using ITensors
+
+i,j,k = Index(15), Index(15), Index(15)
+A = ITensor(i,j,k)
+A[i=>1,j=>1,k=>1] = 11.1
+B = randomITensor(i,j,k)
+A[i(1), j(2), k(10)] = 5.0
+
+A[i(1), :, :]
+
+K = randomITensor(i,j[2:5])
+
+c = CartesianIndices(A)
+A[1,1,1]
+
+A*B
+
+SP = diagITensor(i,j,k)
+SP[1,2,1] = 5
+
+
+Yinds = K1inds = i,j,k = Index(15, "i"), Index(15, "j"), Index(15, "k")
+U1inds = K2inds = u,v,w = Index(15, "u"), Index(15, "v"), Index(15, "w")
+rinds = U2inds = r1,r2,r3 = Index(5, "r1"), Index(5, "r2"), Index(5, "r3")
+r = Index(5, "r")
+
+D = diagITensor(r,r,r)
+U1, U2, U3 = randomITensor(r,u), randomITensor(r,v), randomITensor(r,w)
+K1, K2, K3 = randomITensor(i,u), randomITensor(j,v), randomITensor(k,w)
+
+K1*U1*K2
+
+D*U1*U2*U3
+
+U1*U2*U3*K1*K2*K3
+
+pre = "/home/padwulf/Documents/Experiments/Datasets/Artificial/Classification/0.5_(15, 15, 15)_(1, 1, 1)"
+Y, inds = readtensor(pre*"/data.txt")
+K1 = readdlm(pre*"/k1.txt")
+K2 = readdlm(pre*"/k2.txt")
+K3 = readdlm(pre*"/k3.txt")
+K = [K1,K2,K3]
+Ke = eigen.(K)
+"""
